@@ -14,7 +14,7 @@ st.markdown("### Multi-Modal Disease Detection System")
 # 2. Load the Model (With the Version Fix)
 @st.cache_resource
 def load_my_model():
-    # This line MUST be exactly like this to fix the 'dense layer' error
+    # This fixes the 'dense layer' error by ignoring training metadata
     return tf.keras.models.load_model('agroguard_model.h5', compile=False)
 
 try:
