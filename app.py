@@ -15,7 +15,7 @@ st.markdown("### Multi-Modal Disease Detection System")
 @st.cache_resource
 def load_my_model():
     # Adding compile=False fixes the 'dense layer' error
-    return tf.keras.models.load_model('agroguard_model.h5',compile=False)
+    return tf.keras.models.load_model('agroguard_model.h5', compile=False)
 
 try:
     model = load_my_model()
