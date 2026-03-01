@@ -15,7 +15,7 @@ st.markdown("### Multi-Modal Disease Detection System")
 @st.cache_resource
 def load_my_model():
     # This must match the filename you uploaded to GitHub
-    return tf.keras.models.load_model('agroguard_model.h5')
+    return tf.keras.models.load_model('agroguard_model.h5', compile=False)
 
 try:
     model = load_my_model()
