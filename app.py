@@ -1,93 +1,89 @@
 import streamlit as st
 import tensorflow as tf
-from gtts import gTTS
 import numpy as np
 from PIL import Image
-import base64
 import os
+from gtts import gTTS
+import base64
 
-# 1. Page Configuration for a Professional Look
+# --- 1. SET PAGE CONFIG ---
 st.set_page_config(page_title="AgroGuard AI", page_icon="🌿", layout="centered")
 
-# Custom CSS for a better "Vibe"
-st.markdown("""
-    <style>
-    .main { background-color: #f5f7f9; }
-    .stButton>button { width: 100%; border-radius: 20px; }
-    </style>
-    """, unsafe_allow_html=True)
+# --- 2. MODEL LOADING (The "Bulletproof" Way) ---
+# This ensures it looks in the same folder where app.py lives
+MODEL_PATH = "agroguard_model.h5" 
 
-st.title("🌿 AgroGuard: Intelligent Plant Pathology")
-st.markdown("### Multi-Modal Disease Detection System")
-
-# 2. Load the Model Safely
 @st.cache_resource
 def load_my_model():
-    # Use compile=False to avoid version mismatch errors during deployment
-    return tf.keras.models.load_model('agroguard_model.h5', compile=False)
-
-try:
-    model = load_my_model()
-except Exception as e:
-    st.error(f"⚠️ Model file 'agroguard_model.h5' not found in your GitHub repo!")
-
-# 3. Comprehensive Labels (Matching your dataset)
-labels = [
-    'Apple: Scab', 'Apple: Black rot', 'Apple: Cedar apple rust', 'Apple: Healthy', 
-    'Blueberry: Healthy', 'Cherry: Powdery mildew', 'Cherry: Healthy', 
-    'Corn: Gray leaf spot', 'Corn: Common rust', 'Corn: Northern Leaf Blight', 'Corn: Healthy', 
-    'Grape: Black rot', 'Grape: Esca (Black Measles)', 'Grape: Leaf blight', 'Grape: Healthy', 
-    'Orange: Haunglongbing (Citrus greening)', 'Peach: Bacterial spot', 'Peach: Healthy', 
-    'Pepper: Bacterial spot', 'Pepper: Healthy', 'Potato: Early blight', 'Potato: Late blight', 
-    'Potato: Healthy', 'Raspberry: Healthy', 'Soybean: Healthy', 'Squash: Powdery mildew', 
-    'Strawberry: Leaf scorch', 'Strawberry: Healthy', 'Tomato: Bacterial spot', 
-    'Tomato: Early blight', 'Tomato: Late blight', 'Tomato: Leaf Mold', 
-    'Tomato: Septoria leaf spot', 'Tomato: Spider mites', 'Tomato: Target Spot', 
-    'Tomato: Yellow Leaf Curl Virus', 'Tomato: Mosaic virus', 'Tomato: Healthy'
-]
-
-# 4. Voice Feedback Function
-def play_voice(text):
+    if not os.path.exists(MODEL_PATH):
+        st.error(f"🚨 Model file '{MODEL_PATH}' NOT found in GitHub! Current files: {os.listdir('.')}")
+        return None
     try:
-        tts = gTTS(text=text, lang='en')
-        tts.save("temp.mp3")
-        with open("temp.mp3", "rb") as f:
-            data = f.read()
-            b64 = base64.b64encode(data).decode()
-            md = f'<audio autoplay="true"><source src="data:audio/mp3;base64,{b64}" type="audio/mp3"></audio>'
-            st.markdown(md, unsafe_allow_html=True)
-        os.remove("temp.mp3")
+        model = tf.keras.models.load_model(MODEL_PATH)
+        return model
     except Exception as e:
-        st.write("🔈 Audio feedback unavailable.")
+        st.error(f"❌ Error loading model: {e}")
+        return None
 
-# 5. User Interface for Uploading
-uploaded_file = st.file_uploader("📸 Upload a leaf image to scan...", type=["jpg", "png", "jpeg"])
+model = load_my_model()
 
-if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-    st.image(image, caption='Scanning leaf...', use_container_width=True)
-    
-    # PREPROCESSING: Resize to 128x128 to match your model's training
-    img = image.resize((128, 128))
-    img_array = np.array(img) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
-    
-    # PREDICTION
-    with st.spinner('Analyzing plant tissue...'):
-        predictions = model.predict(img_array)
-        result_index = np.argmax(predictions)
+# --- 3. VOICE FUNCTION ---
+def speak_text(text):
+    tts = gTTS(text=text, lang='en')
+    tts.save("diagnosis.mp3")
+    with open("diagnosis.mp3", "rb") as f:
+        data = f.read()
+        b64 = base64.b64encode(data).decode()
+        md = f"""
+            <audio autoplay="true">
+            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+            </audio>
+            """
+        st.markdown(md, unsafe_allow_html=True)
+
+# --- 4. PREDICTION FUNCTION ---
+def model_prediction(test_image):
+    image = Image.open(test_image)
+    image = image.resize((128, 128)) # Ensure this matches your training size (128 or 224)
+    input_arr = tf.keras.preprocessing.image.img_to_array(image)
+    input_arr = np.array([input_arr])  # Convert single image to batch
+    predictions = model.predict(input_arr)
+    return np.argmax(predictions)
+
+# --- 5. UI DESIGN ---
+st.title("🌿 AgroGuard: Intelligent Plant Pathology")
+st.markdown("---")
+
+if model is not None:
+    uploaded_file = st.file_uploader("📸 Upload a leaf image to scan...", type=["jpg", "jpeg", "png"])
+
+    if uploaded_file is not None:
+        st.image(uploaded_file, use_container_width=True, caption="Uploaded Image")
         
-        # Guardrail: Check if prediction index is within labels range
-        if result_index < len(labels):
-            disease_name = labels[result_index]
-            confidence = np.max(predictions) * 100
-            
-            # RESULTS DISPLAY
-            st.balloons() # Celebration effect!
-            st.success(f"**Diagnosis:** {disease_name}")
-            st.info(f"**Confidence Level:** {confidence:.2f}%")
-            
-            # VOICE TRIGGER
-            play_voice(f"Diagnosis complete. Detected {disease_name}")
-        else:
-            st.warning("Model predicted a category outside the current label list.")
+        if st.button("🔍 Predict Disease"):
+            with st.spinner("Analyzing leaf patterns..."):
+                # List of 38 classes (Ensure these match your training order exactly!)
+                class_names = ['Apple___Apple_scab', 'Apple___Black_rot', 'Apple___Cedar_apple_rust', 'Apple___healthy', 
+                               'Blueberry___healthy', 'Cherry_(including_sour)___Powdery_mildew', 'Cherry_(including_sour)___healthy', 
+                               'Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot', 'Corn_(maize)___Common_rust_', 
+                               'Corn_(maize)___Northern_Leaf_Blight', 'Corn_(maize)___healthy', 'Grape___Black_rot', 
+                               'Grape___Esca_(Black_Measles)', 'Grape___Leaf_blight_(Isariopsis_Leaf_Spot)', 'Grape___healthy', 
+                               'Orange___Haunglongbing_(Citrus_greening)', 'Peach___Bacterial_spot', 'Peach___healthy', 
+                               'Pepper,_bell___Bacterial_spot', 'Pepper,_bell___healthy', 'Potato___Early_blight', 
+                               'Potato___Late_blight', 'Potato___healthy', 'Raspberry___healthy', 'Soybean___healthy', 
+                               'Squash___Powdery_mildew', 'Strawberry___Leaf_scorch', 'Strawberry___healthy', 
+                               'Tomato___Bacterial_spot', 'Tomato___Early_blight', 'Tomato___Late_blight', 
+                               'Tomato___Leaf_Mold', 'Tomato___Septoria_leaf_spot', 'Tomato___Spider_mites Two-spotted_spider_mite', 
+                               'Tomato___Target_Spot', 'Tomato___Tomato_Yellow_Leaf_Curl_Virus', 'Tomato___Tomato_mosaic_virus', 
+                               'Tomato___healthy']
+                
+                result_index = model_prediction(uploaded_file)
+                diagnosis = class_names[result_index].replace("___", " ").replace("_", " ")
+                
+                st.balloons()
+                st.success(f"**Prediction:** {diagnosis}")
+                
+                # Trigger the voice
+                speak_text(f"The AI diagnosis is {diagnosis}")
+else:
+    st.warning("⚠️ App is waiting for the model file to sync from GitHub.")
