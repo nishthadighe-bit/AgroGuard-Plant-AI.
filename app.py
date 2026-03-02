@@ -9,16 +9,16 @@ import base64
 # --- 1. SET PAGE CONFIG ---
 st.set_page_config(page_title="AgroGuard AI", page_icon="🌿", layout="centered")
 
-# --- 2. THE "CLASS-SAVER" MODEL LOADING ---
+# --- 2. THE FINAL "INPUT TENSOR" FIX ---
 MODEL_PATH = "agroguard_model.h5" 
 
 @st.cache_resource
 def load_my_model():
     if not os.path.exists(MODEL_PATH):
-        st.error(f"🚨 Model file '{MODEL_PATH}' NOT found in GitHub! Check the filename.")
+        st.error(f"🚨 Model file '{MODEL_PATH}' NOT found in GitHub!")
         return None
     try:
-        # THE FIX: compile=False ignores the optimizer mismatch causing the error
+        # THE FIX: compile=False ignores the optimizer mismatch causing the 2-tensor error
         model = tf.keras.models.load_model(MODEL_PATH, compile=False)
         return model
     except Exception as e:
@@ -27,7 +27,7 @@ def load_my_model():
 
 model = load_my_model()
 
-# --- 3. VOICE FEEDBACK FUNCTION ---
+# --- 3. VOICE FEEDBACK ---
 def speak_text(text):
     try:
         tts = gTTS(text=text, lang='en')
@@ -47,7 +47,7 @@ def speak_text(text):
 # --- 4. PREDICTION LOGIC ---
 def model_prediction(test_image):
     image = Image.open(test_image)
-    image = image.resize((128, 128)) # Ensure this matches your training size
+    image = image.resize((128, 128)) # Ensure this matches your model's input size
     input_arr = tf.keras.preprocessing.image.img_to_array(image)
     input_arr = np.array([input_arr]) 
     predictions = model.predict(input_arr)
@@ -56,6 +56,7 @@ def model_prediction(test_image):
 # --- 5. USER INTERFACE ---
 st.title("🌿 AgroGuard: Intelligent Plant Pathology")
 st.markdown("---")
+
 if model is not None:
     uploaded_file = st.file_uploader("📸 Upload a leaf image to scan...", type=["jpg", "jpeg", "png"])
 
@@ -63,7 +64,7 @@ if model is not None:
         st.image(uploaded_file, use_container_width=True, caption="Uploaded Leaf Image")
         
         if st.button("🔍 Predict Disease"):
-            with st.spinner("AI is analyzing the leaf..."):
+            with st.spinner("AI is analyzing the leaf patterns..."):
                 class_names = ['Apple___Apple_scab', 'Apple___Black_rot', 'Apple___Cedar_apple_rust', 'Apple___healthy', 
                                'Blueberry___healthy', 'Cherry_(including_sour)___Powdery_mildew', 'Cherry_(including_sour)___healthy', 
                                'Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot', 'Corn_(maize)___Common_rust_', 
