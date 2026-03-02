@@ -9,16 +9,16 @@ import base64
 # --- 1. SET PAGE CONFIG ---
 st.set_page_config(page_title="AgroGuard AI", page_icon="🌿", layout="centered")
 
-# --- 2. MODEL LOADING (With Shape Mismatch Fix) ---
+# --- 2. THE "CLASS-SAVER" MODEL LOADING ---
 MODEL_PATH = "agroguard_model.h5" 
 
 @st.cache_resource
 def load_my_model():
     if not os.path.exists(MODEL_PATH):
-        st.error(f"🚨 Model file '{MODEL_PATH}' NOT found in GitHub!")
+        st.error(f"🚨 Model file '{MODEL_PATH}' NOT found in GitHub! Check the filename.")
         return None
     try:
-        # Added compile=False to fix the "dense layer expects 1 input" error
+        # THE FIX: compile=False ignores the optimizer mismatch causing the error
         model = tf.keras.models.load_model(MODEL_PATH, compile=False)
         return model
     except Exception as e:
@@ -27,7 +27,7 @@ def load_my_model():
 
 model = load_my_model()
 
-# --- 3. VOICE FUNCTION ---
+# --- 3. VOICE FEEDBACK FUNCTION ---
 def speak_text(text):
     try:
         tts = gTTS(text=text, lang='en')
@@ -42,29 +42,28 @@ def speak_text(text):
                 """
             st.markdown(md, unsafe_allow_html=True)
     except:
-        pass # Silently fail if audio hits a snag
+        pass 
 
-# --- 4. PREDICTION FUNCTION ---
+# --- 4. PREDICTION LOGIC ---
 def model_prediction(test_image):
     image = Image.open(test_image)
-    image = image.resize((128, 128)) # Matches your training dimensions
+    image = image.resize((128, 128)) # Ensure this matches your training size
     input_arr = tf.keras.preprocessing.image.img_to_array(image)
     input_arr = np.array([input_arr]) 
     predictions = model.predict(input_arr)
     return np.argmax(predictions)
 
-# --- 5. UI DESIGN ---
+# --- 5. USER INTERFACE ---
 st.title("🌿 AgroGuard: Intelligent Plant Pathology")
 st.markdown("---")
-
 if model is not None:
     uploaded_file = st.file_uploader("📸 Upload a leaf image to scan...", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None:
-        st.image(uploaded_file, use_container_width=True, caption="Uploaded Image")
+        st.image(uploaded_file, use_container_width=True, caption="Uploaded Leaf Image")
         
         if st.button("🔍 Predict Disease"):
-            with st.spinner("Analyzing leaf patterns..."):
+            with st.spinner("AI is analyzing the leaf..."):
                 class_names = ['Apple___Apple_scab', 'Apple___Black_rot', 'Apple___Cedar_apple_rust', 'Apple___healthy', 
                                'Blueberry___healthy', 'Cherry_(including_sour)___Powdery_mildew', 'Cherry_(including_sour)___healthy', 
                                'Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot', 'Corn_(maize)___Common_rust_', 
@@ -86,4 +85,4 @@ if model is not None:
                 st.success(f"**Prediction:** {diagnosis}")
                 speak_text(f"The AI diagnosis is {diagnosis}")
 else:
-    st.warning("⚠️ App is waiting for the model file to sync from GitHub.")
+    st.info("🔄 App is preparing the AI model... Please wait a moment.")
