@@ -9,17 +9,17 @@ import base64
 # --- 1. SET PAGE CONFIG ---
 st.set_page_config(page_title="AgroGuard AI", page_icon="🌿", layout="centered")
 
-# --- 2. MODEL LOADING (The "Bulletproof" Way) ---
-# This ensures it looks in the same folder where app.py lives
+# --- 2. MODEL LOADING (With Shape Mismatch Fix) ---
 MODEL_PATH = "agroguard_model.h5" 
 
 @st.cache_resource
 def load_my_model():
     if not os.path.exists(MODEL_PATH):
-        st.error(f"🚨 Model file '{MODEL_PATH}' NOT found in GitHub! Current files: {os.listdir('.')}")
+        st.error(f"🚨 Model file '{MODEL_PATH}' NOT found in GitHub!")
         return None
     try:
-        model = tf.keras.models.load_model(MODEL_PATH)
+        # Added compile=False to fix the "dense layer expects 1 input" error
+        model = tf.keras.models.load_model(MODEL_PATH, compile=False)
         return model
     except Exception as e:
         st.error(f"❌ Error loading model: {e}")
@@ -29,24 +29,27 @@ model = load_my_model()
 
 # --- 3. VOICE FUNCTION ---
 def speak_text(text):
-    tts = gTTS(text=text, lang='en')
-    tts.save("diagnosis.mp3")
-    with open("diagnosis.mp3", "rb") as f:
-        data = f.read()
-        b64 = base64.b64encode(data).decode()
-        md = f"""
-            <audio autoplay="true">
-            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-            </audio>
-            """
-        st.markdown(md, unsafe_allow_html=True)
+    try:
+        tts = gTTS(text=text, lang='en')
+        tts.save("diagnosis.mp3")
+        with open("diagnosis.mp3", "rb") as f:
+            data = f.read()
+            b64 = base64.b64encode(data).decode()
+            md = f"""
+                <audio autoplay="true">
+                <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+                </audio>
+                """
+            st.markdown(md, unsafe_allow_html=True)
+    except:
+        pass # Silently fail if audio hits a snag
 
 # --- 4. PREDICTION FUNCTION ---
 def model_prediction(test_image):
     image = Image.open(test_image)
-    image = image.resize((128, 128)) # Ensure this matches your training size (128 or 224)
+    image = image.resize((128, 128)) # Matches your training dimensions
     input_arr = tf.keras.preprocessing.image.img_to_array(image)
-    input_arr = np.array([input_arr])  # Convert single image to batch
+    input_arr = np.array([input_arr]) 
     predictions = model.predict(input_arr)
     return np.argmax(predictions)
 
@@ -62,7 +65,6 @@ if model is not None:
         
         if st.button("🔍 Predict Disease"):
             with st.spinner("Analyzing leaf patterns..."):
-                # List of 38 classes (Ensure these match your training order exactly!)
                 class_names = ['Apple___Apple_scab', 'Apple___Black_rot', 'Apple___Cedar_apple_rust', 'Apple___healthy', 
                                'Blueberry___healthy', 'Cherry_(including_sour)___Powdery_mildew', 'Cherry_(including_sour)___healthy', 
                                'Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot', 'Corn_(maize)___Common_rust_', 
@@ -82,8 +84,6 @@ if model is not None:
                 
                 st.balloons()
                 st.success(f"**Prediction:** {diagnosis}")
-                
-                # Trigger the voice
                 speak_text(f"The AI diagnosis is {diagnosis}")
 else:
     st.warning("⚠️ App is waiting for the model file to sync from GitHub.")
