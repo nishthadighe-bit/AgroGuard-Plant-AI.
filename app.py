@@ -9,8 +9,8 @@ import base64
 # --- 1. SET PAGE CONFIG ---
 st.set_page_config(page_title="AgroGuard AI", page_icon="🌿", layout="centered")
 
-# --- 2. THE FINAL "INPUT TENSOR" FIX ---
-MODEL_PATH = "agroguard_model.h5" 
+# --- 2. THE ULTIMATE MODEL LOADING FIX ---
+MODEL_PATH = "agroguard_model.h5"
 
 @st.cache_resource
 def load_my_model():
@@ -18,11 +18,13 @@ def load_my_model():
         st.error(f"🚨 Model file '{MODEL_PATH}' NOT found in GitHub!")
         return None
     try:
-        # THE FIX: compile=False ignores the optimizer mismatch causing the 2-tensor error
+        # We use compile=False to strictly ignore the training metadata causing the '2 tensors' error
         model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+        # Manually triggering a build to ensure it's ready for 1 input
+        model.build((None, 128, 128, 3)) 
         return model
     except Exception as e:
-        st.error(f"❌ Error loading model: {e}")
+        st.error(f"❌ technical error: {e}")
         return None
 
 model = load_my_model()
@@ -40,20 +42,20 @@ def speak_text(text):
                 <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
                 </audio>
                 """
-            st.markdown(md, unsafe_allow_html=True)
+        st.markdown(md, unsafe_allow_html=True)
     except:
-        pass 
+        pass
 
 # --- 4. PREDICTION LOGIC ---
 def model_prediction(test_image):
     image = Image.open(test_image)
-    image = image.resize((128, 128)) # Ensure this matches your model's input size
+    image = image.resize((128, 128))
     input_arr = tf.keras.preprocessing.image.img_to_array(image)
-    input_arr = np.array([input_arr]) 
+    input_arr = np.array([input_arr]) / 255.0  # Added normalization just in case
     predictions = model.predict(input_arr)
     return np.argmax(predictions)
 
-# --- 5. USER INTERFACE ---
+# --- 5. UI DESIGN ---
 st.title("🌿 AgroGuard: Intelligent Plant Pathology")
 st.markdown("---")
 
@@ -61,29 +63,17 @@ if model is not None:
     uploaded_file = st.file_uploader("📸 Upload a leaf image to scan...", type=["jpg", "jpeg", "png"])
 
     if uploaded_file is not None:
-        st.image(uploaded_file, use_container_width=True, caption="Uploaded Leaf Image")
+        st.image(uploaded_file, use_container_width=True)
         
         if st.button("🔍 Predict Disease"):
-            with st.spinner("AI is analyzing the leaf patterns..."):
-                class_names = ['Apple___Apple_scab', 'Apple___Black_rot', 'Apple___Cedar_apple_rust', 'Apple___healthy', 
-                               'Blueberry___healthy', 'Cherry_(including_sour)___Powdery_mildew', 'Cherry_(including_sour)___healthy', 
-                               'Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot', 'Corn_(maize)___Common_rust_', 
-                               'Corn_(maize)___Northern_Leaf_Blight', 'Corn_(maize)___healthy', 'Grape___Black_rot', 
-                               'Grape___Esca_(Black_Measles)', 'Grape___Leaf_blight_(Isariopsis_Leaf_Spot)', 'Grape___healthy', 
-                               'Orange___Haunglongbing_(Citrus_greening)', 'Peach___Bacterial_spot', 'Peach___healthy', 
-                               'Pepper,_bell___Bacterial_spot', 'Pepper,_bell___healthy', 'Potato___Early_blight', 
-                               'Potato___Late_blight', 'Potato___healthy', 'Raspberry___healthy', 'Soybean___healthy', 
-                               'Squash___Powdery_mildew', 'Strawberry___Leaf_scorch', 'Strawberry___healthy', 
-                               'Tomato___Bacterial_spot', 'Tomato___Early_blight', 'Tomato___Late_blight', 
-                               'Tomato___Leaf_Mold', 'Tomato___Septoria_leaf_spot', 'Tomato___Spider_mites Two-spotted_spider_mite', 
-                               'Tomato___Target_Spot', 'Tomato___Tomato_Yellow_Leaf_Curl_Virus', 'Tomato___Tomato_mosaic_virus', 
-                               'Tomato___healthy']
+            with st.spinner("AI is analyzing..."):
+                class_names = ['Apple_scab', 'Apple_black_rot', 'Cedar_apple_rust', 'Apple_healthy', 'Blueberry_healthy', 'Cherry_powdery_mildew', 'Cherry_healthy', 'Corn_gray_leaf_spot', 'Corn_common_rust', 'Corn_northern_leaf_blight', 'Corn_healthy', 'Grape_black_rot', 'Grape_esca', 'Grape_leaf_blight', 'Grape_healthy', 'Orange_greening', 'Peach_bacterial_spot', 'Peach_healthy', 'Pepper_bacterial_spot', 'Pepper_healthy', 'Potato_early_blight', 'Potato_late_blight', 'Potato_healthy', 'Raspberry_healthy', 'Soybean_healthy', 'Squash_powdery_mildew', 'Strawberry_leaf_scorch', 'Strawberry_healthy', 'Tomato_bacterial_spot', 'Tomato_early_blight', 'Tomato_late_blight', 'Tomato_leaf_mold', 'Tomato_septoria_leaf_spot', 'Tomato_spider_mites', 'Tomato_target_spot', 'Tomato_yellow_leaf_curl', 'Tomato_mosaic_virus', 'Tomato_healthy']
                 
                 result_index = model_prediction(uploaded_file)
-                diagnosis = class_names[result_index].replace("___", " ").replace("_", " ")
+                diagnosis = class_names[result_index].replace("_", " ")
                 
                 st.balloons()
                 st.success(f"**Prediction:** {diagnosis}")
                 speak_text(f"The AI diagnosis is {diagnosis}")
 else:
-    st.info("🔄 App is preparing the AI model... Please wait a moment.")
+    st.warning("⚠️ App is refreshing the model connection...")
